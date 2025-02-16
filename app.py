@@ -45,10 +45,10 @@ init(autoreset=True)
 
 # Настройки
 PORT = 8000
-THREADS = 10000
+THREADS = 1000
 RANGES_FILE = "ranges.txt"
 OUTPUT_FILE = "found_ips.txt"
-TIMEOUT = 2.5
+TIMEOUT = 1.5
 UPDATE_INTERVAL = 0.1
 BATCH_SIZE = 1000000
 autoclear_found_on_start = True
@@ -65,7 +65,7 @@ COLOR_PROGRESS = Fore.BLUE + Style.BRIGHT
 checked_ips = 0
 successful_ips = 0
 total_ips = 0
-queue = queue.Queue()
+ip_queue = queue.Queue()
 lock = threading.Lock()
 print_lock = threading.Lock()
 stop_event = threading.Event()
@@ -80,7 +80,7 @@ def print_banner():
     ╚═╝     ╚═╝  ╚═══╝      ╚═╝     ╚═╝     ╚══════╝
     """
     print(COLOR_HEADER + banner)
-    print(COLOR_HEADER + " " * 15 + "MVFastPort Scanner | by Mr_VINIK: https://MrVINIK.t.me/\n")
+    print(COLOR_HEADER + " " * 15 + "MV FastPortScanner v1.1 | by Mr_VINIK https://t.me/MrVINIK\n")
 
 def update_title():
     title = f"MV FPS | Проверено: {checked_ips}/{total_ips} | Открыто: {successful_ips}"
@@ -134,7 +134,7 @@ def worker():
     
     while not stop_event.is_set():
         try:
-            ip = queue.get_nowait()
+            ip = ip_queue.get_nowait()
             result = loop.run_until_complete(async_check_port(ip, PORT))
             
             with lock:
@@ -148,9 +148,12 @@ def worker():
                 if checked_ips % 50 == 0 or checked_ips == total_ips:
                     update_progress()
                 
-            queue.task_done()
+            ip_queue.task_done()
         except queue.Empty:
             break
+        except Exception as e:
+            with print_lock:
+                print(COLOR_ERROR + f"[ОШИБКА] В потоке: {e}")
     loop.close()
 
 def ipv4_range_to_ips(start, end):
@@ -167,14 +170,13 @@ def batch_generator(generator, batch_size):
 
 def process_range(start_str, end_str):
     if ':' in start_str:
-        print(COLOR_WARNING + f"Пропуск IPv6 диапазона: {start_str}-{end_str}")
-        return 0
+        return 0  # Пропускаем IPv6 без вывода
     
     gen = ipv4_range_to_ips(start_str, end_str)
     count = 0
     for batch in batch_generator(gen, BATCH_SIZE):
         for ip in batch:
-            queue.put(ip)
+            ip_queue.put(ip)
         count += len(batch)
     return count
 
@@ -182,6 +184,7 @@ def load_ranges():
     global total_ips
     loaded = 0
     start_time = time.time()
+    ipv6_count = 0
     
     try:
         with open(RANGES_FILE) as f:
@@ -202,6 +205,10 @@ def load_ranges():
                 
                 try:
                     start_str, end_str = map(str.strip, line.split('-', 1))
+                    if ':' in start_str:
+                        ipv6_count += 1
+                        continue
+                    
                     count = process_range(start_str, end_str)
                     loaded += count
                     
@@ -219,6 +226,8 @@ def load_ranges():
         duration = time.time() - start_time
         with print_lock:
             print(COLOR_SUCCESS + f"\n[✓] Успешно загружено {loaded:,} IP ({loaded/duration:,.0f} IP/сек)")
+            if ipv6_count > 0:
+                print(COLOR_WARNING + f"[•] Пропущено {ipv6_count} IPv6 диапазонов")
             print(COLOR_HEADER + "-" * 60)
     
     except Exception as e:
@@ -258,8 +267,15 @@ def main():
         t.start()
         threads.append(t)
     
-    while any(t.is_alive() for t in threads):
-        time.sleep(0.5)
+    try:
+        while not ip_queue.empty() and not stop_event.is_set():
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        signal_handler(None, None)
+    
+    # Ожидание завершения всех потоков
+    for t in threads:
+        t.join(timeout=1.0)
     
     stop_event.set()
     print(COLOR_SUCCESS + "\n[✓] Сканирование завершено!")
