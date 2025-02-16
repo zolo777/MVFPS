@@ -35,7 +35,7 @@ python --version
 Запустите программу (зависимости установятся автоматически):
 all systems:
 ```
-python scanner.py
+python app.py
 ```
 или, если вы на Windows, то можете и запустить через run.bat
 
