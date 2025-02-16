@@ -18,7 +18,6 @@ def first_run_setup():
     
     for package in required:
         try:
-            # Проверяем наличие пакета через pip
             subprocess.check_call(
                 [sys.executable, "-m", "pip", "show", package],
                 stdout=subprocess.DEVNULL,
@@ -32,7 +31,6 @@ def first_run_setup():
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
-                # После установки перезапускаем программу
                 print("[СИСТЕМА] Зависимости установлены. Перезапуск...")
                 subprocess.call([sys.executable] + sys.argv)
                 sys.exit(0)
@@ -40,10 +38,8 @@ def first_run_setup():
                 print(f"[ОШИБКА] Не удалось установить {package}: {e}")
                 sys.exit(1)
 
-# Выполняем проверку перед всеми импортами
 first_run_setup()
 
-# Теперь безопасно импортируем colorama
 from colorama import init, Fore, Back, Style
 init(autoreset=True)
 
