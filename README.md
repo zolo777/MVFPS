@@ -30,7 +30,7 @@
 1. Клонируйте репозиторий:
 ```bash
 git clone https://github.com/MrVINIK/MVFPS.git
-cd MVFPS-master
+cd MVFPS
 ```
 или (на Windows)
 скачайте актуальную версию в https://github.com/MrVINIK/MVFPS/releases
